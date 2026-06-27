@@ -20,7 +20,7 @@ local libcurl = ffi.load("curl")
 
 ffi.cdef [[
 const char* curl_easy_strerror(int);
-void* curl_slist_append(void*, char*);
+void* curl_slist_append(void*, const char*);
 void curl_slist_free_all(void*);
 int  curl_global_init(long);
 void curl_global_cleanup(void);
@@ -97,8 +97,7 @@ function CurlGlobal.slist()
 end
 
 function Slist:append(s)
-  local str = ffi.cast("char*", s)
-  local slist = libcurl.curl_slist_append(self.slist, str)
+  local slist = libcurl.curl_slist_append(self.slist, s)
   if slist == nil then
     error("Failed to append slist")
   end
