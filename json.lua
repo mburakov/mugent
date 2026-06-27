@@ -376,4 +376,170 @@ function json.parse(text)
   return value
 end
 
+-- The set of characters that JSON requires (or permits) to be escaped inside a
+-- string, mapped to their escape sequences. Built once at load time: the seven
+-- short forms plus a \u00xx form for every other C0 control character.
+local escapes = {
+  ['"'] = '\\"',
+  ['\\'] = '\\\\',
+  ['\b'] = '\\b',
+  ['\f'] = '\\f',
+  ['\n'] = '\\n',
+  ['\r'] = '\\r',
+  ['\t'] = '\\t',
+}
+for byte = 0, 0x1f do
+  local char = string.char(byte)
+  if not escapes[char] then
+    escapes[char] = string.format("\\u%04x", byte)
+  end
+end
+
+-- Pattern matching every byte that must be escaped: NUL, the other C0 controls
+-- (0x01-0x1f), the double quote, and the backslash. Bytes >= 0x80 pass through
+-- untouched, so well-formed UTF-8 is emitted verbatim (valid per RFC 8259).
+local escape_pattern = '[%z\1-\31"\\]'
+
+-- Doubles can represent every integer up to 2^53 exactly; beyond that the "%d"
+-- path would print digits the number does not actually hold.
+local max_exact_integer = 2 ^ 53
+
+local encode_value -- forward declaration for mutual recursion with tables
+
+---Serialize a string as a quoted, escaped JSON string into the buffer.
+---@param text string
+---@param buffer string[] fragment accumulator
+---@param count integer number of fragments currently in the buffer
+---@return integer count updated fragment count
+local function encode_string(text, buffer, count)
+  count = count + 1
+  -- The parenthesized gsub discards its second result (the substitution count)
+  -- so only the rewritten string reaches the concatenation.
+  buffer[count] = '"' .. (string.gsub(text, escape_pattern, escapes)) .. '"'
+  return count
+end
+
+---Serialize a number, rejecting the non-finite values JSON cannot represent.
+---@param number number
+---@return string text the shortest faithful decimal rendering
+local function encode_number(number)
+  if number ~= number then
+    error("json: cannot serialize NaN", 0)
+  elseif number == math.huge or number == -math.huge then
+    error("json: cannot serialize infinity", 0)
+  elseif number == math.floor(number)
+      and number >= -max_exact_integer and number <= max_exact_integer then
+    return string.format("%d", number) -- exact integer: no decimal point
+  end
+  return string.format("%.14g", number)
+end
+
+---Serialize a Lua table as either a JSON array or object.
+---A table is treated as an array when its keys are exactly the contiguous
+---integers 1..#t; the empty table and any table with non-sequence keys become
+---an object. Object keys must be strings.
+---@param tbl table
+---@param buffer string[] fragment accumulator
+---@param count integer number of fragments currently in the buffer
+---@param seen table<table, true> tables currently open on the recursion stack
+---@return integer count updated fragment count
+local function encode_table(tbl, buffer, count, seen)
+  -- Cycle detection: `seen` holds the tables currently open on the recursion
+  -- stack. Re-entering an open table closes a cycle, which has no JSON form.
+  -- The mark is cleared on exit (below), so `seen` only ever holds ancestors;
+  -- a table reached again by a sibling path (a DAG, not a cycle) serializes
+  -- twice rather than erroring.
+  if seen[tbl] then
+    error("json: circular reference", 0)
+  end
+  seen[tbl] = true
+  local length = #tbl
+  local keys = 0
+  for _ in pairs(tbl) do keys = keys + 1 end
+  if length > 0 and length == keys then
+    -- Dense array: keys are precisely 1..length.
+    count = count + 1
+    buffer[count] = "["
+    for index = 1, length do
+      if index > 1 then
+        count = count + 1
+        buffer[count] = ","
+      end
+      count = encode_value(tbl[index], buffer, count, seen)
+    end
+    count = count + 1
+    buffer[count] = "]"
+  elseif keys == 0 then
+    count = count + 1
+    buffer[count] = "{}" -- empty table renders as an empty object
+  else
+    -- Object: any table that is not a clean array (this also rejects mixed
+    -- array/hash tables, whose integer keys trip the string-key check below).
+    count = count + 1
+    buffer[count] = "{"
+    local first = true
+    for key, value in pairs(tbl) do
+      if type(key) ~= "string" then
+        error("json: object keys must be strings, got " .. type(key), 0)
+      end
+      if first then
+        first = false
+      else
+        count = count + 1
+        buffer[count] = ","
+      end
+      count = encode_string(key, buffer, count)
+      count = count + 1
+      buffer[count] = ":"
+      count = encode_value(value, buffer, count, seen)
+    end
+    count = count + 1
+    buffer[count] = "}"
+  end
+  seen[tbl] = nil -- closed: no longer an ancestor of anything still to come
+  return count
+end
+
+---Serialize any supported value, dispatching on its type.
+---@param value value
+---@param buffer string[] fragment accumulator
+---@param count integer number of fragments currently in the buffer
+---@param seen table<table, true> tables currently open on the recursion stack
+---@return integer count updated fragment count
+encode_value = function(value, buffer, count, seen)
+  if value == json.null then
+    count = count + 1
+    buffer[count] = "null"
+    return count
+  end
+  local kind = type(value)
+  if kind == "string" then
+    return encode_string(value, buffer, count)
+  elseif kind == "number" then
+    count = count + 1
+    buffer[count] = encode_number(value)
+    return count
+  elseif kind == "boolean" then
+    count = count + 1
+    buffer[count] = value and "true" or "false"
+    return count
+  elseif kind == "table" then
+    return encode_table(value, buffer, count, seen)
+  end
+  error("json: cannot serialize " .. kind, 0)
+end
+
+---Serialize a Lua value to a compact JSON document.
+---Accepts strings, finite numbers, booleans, json.null, and tables (arrays or
+---string-keyed objects). Fragments are accumulated in a buffer and joined once,
+---so the cost is linear in the output size rather than quadratic.
+---@param value value the value to encode (json.null for JSON null)
+---@return string json the encoded document
+---@nodiscard
+function json.stringify(value)
+  local buffer = {}
+  encode_value(value, buffer, 0, {})
+  return table.concat(buffer)
+end
+
 return json

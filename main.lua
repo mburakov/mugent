@@ -19,8 +19,11 @@
 local curl = require("curl")
 local json = require("json")
 
-local data = string.format(
-  '{"model":"gemma4:31b-cloud","prompt":"%s"}', assert(arg[1]))
+local data = json.stringify {
+  model = "gemma4:31b-cloud",
+  prompt = assert(arg[1]),
+}
+
 local function write_cb(str)
   for line in string.gmatch(str, "[^\n\r]+") do
     local output = json.parse(line)
