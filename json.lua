@@ -51,8 +51,8 @@ local function skip_whitespace(text, index)
   while true do
     local byte = string.byte(text, index)
     if byte == 0x09          -- horizontal tab
-        or byte == 0x0a      -- carriage return
-        or byte == 0x0d      -- line feed
+        or byte == 0x0a      -- line feed
+        or byte == 0x0d      -- carriage return
         or byte == 0x20 then -- space
       index = index + 1
     else
