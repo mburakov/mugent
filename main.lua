@@ -20,25 +20,59 @@ local curl = require("curl")
 local json = require("json")
 local readline = require("readline")
 
-local data = json.stringify {
-  model = "gemma4:31b-cloud",
-  prompt = readline.readline("> "),
+local header = curl.slist()
+header:append("Authorization: Bearer " ..
+  os.getenv("OLLAMA_API_KEY"))
+header:append("Content-Type: application/json")
+
+local callback_context = {
+  pending = "",
+  content = {},
 }
 
-local function write_cb(str)
-  for line in string.gmatch(str, "[^\n\r]+") do
-    local output = json.parse(line)
-    io.write(assert(output).response)
+local request = curl.easy_init()
+request:easy_setopt(curl.CURLOPT_URL, "https://ollama.com/api/chat")
+request:easy_setopt(curl.CURLOPT_HTTPHEADER, header)
+request:easy_setopt(curl.CURLOPT_WRITEFUNCTION, function(chunk)
+  callback_context.pending = callback_context.pending .. chunk
+  while true do
+    local stop = string.find(callback_context.pending, "\n", 1, true)
+    if not stop then break end
+    local line = string.sub(callback_context.pending, 1, stop - 1)
+    callback_context.pending = string.sub(callback_context.pending, stop + 1)
+    local message = json.parse(line).message
+    local content = message and message.content
+    if content ~= nil then
+      table.insert(callback_context.content, content)
+      io.write(content)
+      io.flush()
+    end
+  end
+end)
+
+local messages = {}
+
+while true do
+  local line = readline.readline("> ")
+  if line == nil then
+    io.write("\n")
+    break
+  end
+
+  table.insert(messages, { role = "user", content = line })
+  request:easy_setopt(curl.CURLOPT_POSTFIELDS, json.stringify {
+    model = "gemma4:31b-cloud",
+    messages = messages,
+  })
+
+  local ok, err = pcall(request.easy_perform, request)
+  if ok then
+    local content = table.concat(callback_context.content)
+    table.insert(messages, { role = "assistant", content = content })
+    callback_context.content = {}
+    io.write("\n")
+  else
+    io.write("error: " .. tostring(err) .. "\n")
+    table.remove(messages)
   end
 end
-
-local header = curl.slist()
-local pat = os.getenv("OLLAMA_API_KEY")
-header:append("Authorization: Bearer " .. pat)
-
-local request = curl.easy_init()
-request:easy_setopt(curl.CURLOPT_URL, "https://ollama.com/api/generate")
-request:easy_setopt(curl.CURLOPT_HTTPHEADER, header)
-request:easy_setopt(curl.CURLOPT_POSTFIELDS, data)
-request:easy_setopt(curl.CURLOPT_WRITEFUNCTION, write_cb)
-request:easy_perform()
