@@ -17,9 +17,11 @@
 
 local bit = require("bit")
 
-local json = {}
+local json = {
+  null = {} -- sentinel returned for JSON null (distinct from Lua nil)
+}
 
----@alias value nil|boolean|string|number|table
+---@alias value boolean|string|number|table the JSON value (null is json.null)
 
 local parse_value
 
@@ -258,7 +260,7 @@ end
 ---Parse a JSON array starting at the opening bracket.
 ---@param text string
 ---@param index integer byte offset of the opening bracket
----@return table array the parsed array (null elements omitted)
+---@return table array the parsed array (JSON null kept as json.null)
 ---@return integer index byte offset just past the closing bracket
 local function parse_array(text, index)
   index = skip_whitespace(text, index + 1)
@@ -268,12 +270,8 @@ local function parse_array(text, index)
   end
   local count = 0
   while true do
-    local value
-    value, index = parse_value(text, index)
-    if value ~= nil then -- drop null elements; keep the array contiguous
-      count = count + 1
-      array[count] = value
-    end
+    count = count + 1
+    array[count], index = parse_value(text, index)
     index = skip_whitespace(text, index)
     local byte = string.byte(text, index)
     if byte == 0x5d then     -- closing bracket
@@ -289,7 +287,7 @@ end
 ---Parse a JSON object starting at the opening brace.
 ---@param text string
 ---@param index integer byte offset of the opening brace
----@return table object the parsed object (null-valued keys omitted)
+---@return table object the parsed object (JSON null kept as json.null)
 ---@return integer index byte offset just past the closing brace
 local function parse_object(text, index)
   index = skip_whitespace(text, index + 1)
@@ -309,7 +307,7 @@ local function parse_object(text, index)
     end
     local value
     value, index = parse_value(text, skip_whitespace(text, index + 1))
-    object[key] = value -- duplicate keys: last one wins (permitted by the RFC)
+    object[key] = value -- json.null retained; duplicate keys: last one wins
     index = skip_whitespace(text, index)
     local byte = string.byte(text, index)
     if byte == 0x7d then     -- closing brace
@@ -325,7 +323,7 @@ end
 ---Parse any JSON value.
 ---@param text string
 ---@param index integer byte offset of the first byte of the value
----@return value value the parsed value (nil for JSON null)
+---@return value value the parsed value (json.null for JSON null)
 ---@return integer index byte offset just past the value
 parse_value = function(text, index)
   local byte = string.byte(text, index)
@@ -347,7 +345,7 @@ parse_value = function(text, index)
     fail(text, index, "invalid literal")
   elseif byte == 0x6e then -- lowercase n
     if string.sub(text, index, index + 3) == "null" then
-      return nil, index + 4
+      return json.null, index + 4
     end
     fail(text, index, "invalid literal")
   elseif byte == 0x2d or (byte and byte >= 0x30 and byte <= 0x39) then
