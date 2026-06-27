@@ -18,10 +18,11 @@
 
 local curl = require("curl")
 local json = require("json")
+local readline = require("readline")
 
 local data = json.stringify {
   model = "gemma4:31b-cloud",
-  prompt = assert(arg[1]),
+  prompt = readline.readline("> "),
 }
 
 local function write_cb(str)
