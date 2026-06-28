@@ -79,6 +79,12 @@ local CurlGlobal = {
       return ffi.cast("void*", arg.slist)
     end,
   },
+  CURLOPT_FOLLOWLOCATION = { -- 1322
+    [const.value] = 52,
+    [const.cast] = function(arg)
+      return ffi.cast("long", arg)
+    end,
+  },
   CURLOPT_POSTFIELDSIZE = { -- 1351
     [const.value] = 60,
     [const.cast]  = function(arg)

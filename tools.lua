@@ -15,8 +15,9 @@
 -- along with mugent.  If not, see <https://www.gnu.org/licenses/>.
 --
 
-local tools = {}
 local curl = require("curl")
+
+local tools = {}
 
 local registry = {
   tools = {},
@@ -199,6 +200,7 @@ tools:register(
     local response = {}
 
     request:easy_setopt(curl.CURLOPT_URL, args.url)
+    request:easy_setopt(curl.CURLOPT_FOLLOWLOCATION, 1)
     request:easy_setopt(curl.CURLOPT_WRITEFUNCTION, function(chunk)
       table.insert(response, chunk)
     end)
@@ -206,10 +208,7 @@ tools:register(
     local ok, err = pcall(request.easy_perform, request)
     request:easy_cleanup()
 
-    if not ok then
-      return "error: " .. tostring(err)
-    end
-
+    if not ok then return "error: " .. tostring(err) end
     local body = table.concat(response)
     return body ~= "" and body or "(empty response)"
   end
