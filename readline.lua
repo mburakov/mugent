@@ -24,7 +24,6 @@ void free(void*);
 ]]
 
 local Readline = {}
-Readline.__index = Readline
 
 function Readline.readline(prompt)
   local buffer = libreadline.readline(prompt)

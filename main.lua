@@ -19,6 +19,7 @@
 local curl = require("curl")
 local json = require("json")
 local readline = require("readline")
+local tools = require("tools")
 
 local header = curl.slist()
 header:append("Authorization: Bearer " ..
@@ -28,6 +29,7 @@ header:append("Content-Type: application/json")
 local callback_context = {
   pending = "",
   content = {},
+  tool_calls = {},
 }
 
 local request = curl.easy_init()
@@ -41,37 +43,68 @@ request:easy_setopt(curl.CURLOPT_WRITEFUNCTION, function(chunk)
     local line = string.sub(callback_context.pending, 1, stop - 1)
     callback_context.pending = string.sub(callback_context.pending, stop + 1)
     local message = json.parse(line).message
-    local content = message and message.content
-    if content == nil then error(chunk) end
-    table.insert(callback_context.content, content)
-    io.write(content)
-    io.flush()
+    if message.content and message.content ~= "" then
+      table.insert(callback_context.content, message.content)
+      io.write(message.content)
+      io.flush()
+    end
+    if message.tool_calls then
+      for _, call in ipairs(message.tool_calls) do
+        table.insert(callback_context.tool_calls, call)
+      end
+    end
   end
 end)
 
 local messages = {}
-
-while true do
-  local line = readline.readline("> ")
-  if line == nil then
-    io.write("\n")
-    break
-  end
-
-  table.insert(messages, { role = "user", content = line })
+local function chat()
   request:easy_setopt(curl.CURLOPT_POSTFIELDS, json.stringify {
     model = "gemma4:cloud",
     messages = messages,
+    tools = tools:get(),
   })
 
-  local ok, err = pcall(request.easy_perform, request)
-  if ok then
-    local content = table.concat(callback_context.content)
-    table.insert(messages, { role = "assistant", content = content })
-    callback_context.content = {}
-    io.write("\n")
-  else
+  request:easy_perform()
+  local content = table.concat(callback_context.content)
+  local tool_calls = callback_context.tool_calls
+  callback_context.content = {}
+  callback_context.tool_calls = {}
+  return content, tool_calls
+end
+
+local function run_turn()
+  while true do
+    local content, tool_calls = chat()
+    table.insert(messages, {
+      role = "assistant",
+      content = content,
+      tool_calls = #tool_calls > 0 and tool_calls or nil,
+    })
+    if #tool_calls == 0 then break end
+    for _, call in ipairs(tool_calls) do
+      local funcall = call["function"]
+      local result = tools:call(funcall.name, funcall.arguments)
+      table.insert(messages, {
+        role = "tool",
+        tool_name = funcall.name,
+        content = result,
+      })
+    end
+  end
+  io.write("\n")
+end
+
+while true do
+  local line = readline.readline("> ")
+  if line == nil then break end
+
+  local mark = #messages
+  table.insert(messages, { role = "user", content = line })
+  local ok, err = pcall(run_turn)
+  if not ok then
     io.write("error: " .. tostring(err) .. "\n")
-    table.remove(messages)
+    while #messages > mark do
+      table.remove(messages)
+    end
   end
 end
