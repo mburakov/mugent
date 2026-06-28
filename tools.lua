@@ -16,6 +16,7 @@
 --
 
 local tools = {}
+local curl = require("curl")
 
 local registry = {
   tools = {},
@@ -169,6 +170,48 @@ tools:register(
     out:close()
 
     return ("ok: wrote %d lines to %s"):format(#result, args.path)
+  end
+)
+
+tools:register(
+  "exec",
+  "Execute an arbitrary shell command and return the output.",
+  {
+    command = tools.property("string", "The shell command to execute.", true),
+  },
+  function(args)
+    local pipe, err = io.popen(args.command .. " 2>&1")
+    if not pipe then return "error: " .. tostring(err) end
+    local output = pipe:read("*a")
+    pipe:close()
+    return output ~= "" and output or "(no output)"
+  end
+)
+
+tools:register(
+  "fetch",
+  "Fetch the content of a URL from the internet.",
+  {
+    url = tools.property("string", "The URL to fetch.", true),
+  },
+  function(args)
+    local request = curl.easy_init()
+    local response = {}
+
+    request:easy_setopt(curl.CURLOPT_URL, args.url)
+    request:easy_setopt(curl.CURLOPT_WRITEFUNCTION, function(chunk)
+      table.insert(response, chunk)
+    end)
+
+    local ok, err = pcall(request.easy_perform, request)
+    request:easy_cleanup()
+
+    if not ok then
+      return "error: " .. tostring(err)
+    end
+
+    local body = table.concat(response)
+    return body ~= "" and body or "(empty response)"
   end
 )
 
