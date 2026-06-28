@@ -42,11 +42,10 @@ request:easy_setopt(curl.CURLOPT_WRITEFUNCTION, function(chunk)
     callback_context.pending = string.sub(callback_context.pending, stop + 1)
     local message = json.parse(line).message
     local content = message and message.content
-    if content ~= nil then
-      table.insert(callback_context.content, content)
-      io.write(content)
-      io.flush()
-    end
+    if content == nil then error(chunk) end
+    table.insert(callback_context.content, content)
+    io.write(content)
+    io.flush()
   end
 end)
 
@@ -61,7 +60,7 @@ while true do
 
   table.insert(messages, { role = "user", content = line })
   request:easy_setopt(curl.CURLOPT_POSTFIELDS, json.stringify {
-    model = "gemma4:31b-cloud",
+    model = "gemma4:cloud",
     messages = messages,
   })
 
