@@ -17,6 +17,7 @@
 
 local curl = require("curl")
 local json = require("json")
+local util = require("util")
 
 local tools = {}
 
@@ -76,7 +77,9 @@ function tools:get()
 end
 
 function tools:call(name, args)
-  return registry.handlers[name](args)
+  local ok, result = pcall(registry.handlers[name], args)
+  if not ok then return "error: " .. tostring(result) end
+  return result
 end
 
 tools:register(
@@ -94,11 +97,9 @@ tools:register(
   function(args)
     local offset = math.floor(args.offset or 1)
     local count = args.count and math.floor(args.count)
-    if offset < 1 then return "error: offset must be >= 1" end
-    if count and count < 1 then return "error: count must be >= 1" end
-
-    local file, err = io.open(args.path, "r")
-    if not file then return "error: " .. tostring(err) end
+    util.check(offset >= 1, "offset must be >= 1")
+    util.check(not count or count >= 1, "count must be >= 1")
+    local file = util.check(io.open(args.path, "r"))
 
     local lines = {}
     local lineno = 0
@@ -136,7 +137,7 @@ tools:register(
   function(args)
     local offset = math.floor(args.offset or 1)
     local count = math.floor(args.count or 1)
-    if offset == 0 then return "error: offset must be nonzero" end
+    util.check(offset ~= 0, "offset must be nonzero")
 
     local lines = {}
     local file = io.open(args.path, "r")
@@ -147,17 +148,16 @@ tools:register(
       file:close()
     end
 
-    if offset < 0 then offset = #lines + 1 end
-
     local data = {}
+    if offset < 0 then offset = #lines + 1 end
     if args.data and args.data ~= "" then
       for line in (args.data .. "\n"):gmatch("(.-)\n") do
         table.insert(data, line)
       end
     end
 
-    local last = count < 0 and #lines or (offset + count - 1)
     local result = {}
+    local last = count < 0 and #lines or (offset + count - 1)
     for index = 1, math.min(offset - 1, #lines) do
       table.insert(result, lines[index])
     end
@@ -168,8 +168,7 @@ tools:register(
       table.insert(result, lines[index])
     end
 
-    local out, err = io.open(args.path, "w")
-    if not out then return "error: " .. tostring(err) end
+    local out = util.check(io.open(args.path, "w"))
     if #result > 0 then
       out:write(table.concat(result, "\n"), "\n")
     end
@@ -186,8 +185,7 @@ tools:register(
     command = tools.property("string", "The shell command to execute.", true),
   },
   function(args)
-    local pipe, err = io.popen(args.command .. " 2>&1")
-    if not pipe then return "error: " .. tostring(err) end
+    local pipe = util.check(io.popen(args.command .. " 2>&1"))
     local output = pipe:read("*a")
     pipe:close()
     return output ~= "" and output or "(no output)"
@@ -213,7 +211,7 @@ tools:register(
     local ok, err = pcall(request.easy_perform, request)
     request:easy_cleanup()
 
-    if not ok then return "error: " .. tostring(err) end
+    util.check(ok, err)
     local body = table.concat(response)
     return body ~= "" and body or "(empty response)"
   end
@@ -229,13 +227,9 @@ tools:register(
     code = tools.property("string", "Lua code to execute.", true)
   },
   function(args)
-    local fun, err = loadstring(args.code)
-    if not fun then return "error: " .. tostring(err) end
-
+    local fun = util.check(loadstring(args.code))
     local ok, encoded = pcall(json.stringify, { pcall(fun) })
-    if not ok then
-      return "error: cannot serialize result: " .. tostring(encoded)
-    end
+    util.check(ok, "cannot serialize result: " .. tostring(encoded))
     return encoded
   end
 )
