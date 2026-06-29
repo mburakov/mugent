@@ -21,10 +21,17 @@ local json = require("json")
 local readline = require("readline")
 local tools = require("tools")
 
+local ollama_api_key = os.getenv("OLLAMA_API_KEY")
+local ollama_api_url = os.getenv("OLLAMA_API_URL") or
+    "http://127.0.0.1:11434/api/chat"
+local ollama_model = os.getenv("OLLAMA_MODEL") or
+    "qwen3.6:35b"
+
 local header = curl.slist()
-header:append("Authorization: Bearer " ..
-  os.getenv("OLLAMA_API_KEY"))
 header:append("Content-Type: application/json")
+if ollama_api_key then
+  header:append("Authorization: Bearer " .. ollama_api_key)
+end
 
 local callback_context = {
   pending = "",
@@ -33,7 +40,7 @@ local callback_context = {
 }
 
 local request = curl.easy_init()
-request:easy_setopt(curl.CURLOPT_URL, "https://ollama.com/api/chat")
+request:easy_setopt(curl.CURLOPT_URL, ollama_api_url)
 request:easy_setopt(curl.CURLOPT_HTTPHEADER, header)
 request:easy_setopt(curl.CURLOPT_WRITEFUNCTION, function(chunk)
   callback_context.pending = callback_context.pending .. chunk
@@ -59,7 +66,7 @@ end)
 local messages = {}
 local function chat()
   request:easy_setopt(curl.CURLOPT_POSTFIELDS, json.stringify {
-    model = "gemma4:cloud",
+    model = ollama_model,
     messages = messages,
     tools = tools:get(),
   })
