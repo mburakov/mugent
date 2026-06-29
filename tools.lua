@@ -16,6 +16,7 @@
 --
 
 local curl = require("curl")
+local json = require("json")
 
 local tools = {}
 
@@ -211,6 +212,27 @@ tools:register(
     if not ok then return "error: " .. tostring(err) end
     local body = table.concat(response)
     return body ~= "" and body or "(empty response)"
+  end
+)
+
+tools:register(
+  "pcall",
+  "Execute arbitrary Lua code, wrapped in pcall, in the same Lua " ..
+  "environment as the current model loop. Multiline source is allowed; " ..
+  "use a `return` statement to surface values. The result follows pcall " ..
+  "convention, serialized as a JSON array.",
+  {
+    code = tools.property("string", "Lua code to execute.", true)
+  },
+  function(args)
+    local fun, err = loadstring(args.code)
+    if not fun then return "error: " .. tostring(err) end
+
+    local ok, encoded = pcall(json.stringify, { pcall(fun) })
+    if not ok then
+      return "error: cannot serialize result: " .. tostring(encoded)
+    end
+    return encoded
   end
 )
 
