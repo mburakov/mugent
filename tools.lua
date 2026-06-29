@@ -81,8 +81,8 @@ end
 
 tools:register(
   "read",
-  "Read and return the contents of a file on the local disk. " ..
-  "Optional offset and count can be provided to read a section of the file.",
+  "Read and return the contents of a file on the local disk. Optional " ..
+  "`offset` and `count` can be provided to read a section of the file.",
   {
     path = tools.property(
       "string", "Path to the file to read.", true),
@@ -117,24 +117,26 @@ tools:register(
 
 tools:register(
   "write",
-  "Write a file on the local disk, creating it if needed. Offset and count " ..
-  "select a line range to replace; omit both to replace the whole file, or " ..
-  "omit data to delete the range.",
+  "Write a file on the local disk, creating it if needed. `offset` (1-based) " ..
+  "and `count` select a line range starting at `offset`. Omit `data` to " ..
+  "delete the selected lines. Replace the whole file with offset=1, count=-1.",
   {
     path = tools.property(
       "string", "Path to the file to write.", true),
     data = tools.property(
       "string", "Lines to write. Omit to delete the selected lines."),
     offset = tools.property(
-      "integer", "First line to replace, counting from 1. First by default."),
+      "integer", "First line to operate on, counting from 1. First line by " ..
+      "default; negative refers to the end of the file, e.g. for appending."),
     count = tools.property(
-      "integer", "Number of lines to replace. Till end of file by default."),
+      "integer", "Lines to replace starting at offset. 1 by default; 0 " ..
+      "inserts before offset without replacing; negative replaces through " ..
+      "end of file."),
   },
   function(args)
     local offset = math.floor(args.offset or 1)
-    local count = args.count and math.floor(args.count)
-    if offset < 1 then return "error: offset must be >= 1" end
-    if count and count < 1 then return "error: count must be >= 1" end
+    local count = math.floor(args.count or 1)
+    if offset == 0 then return "error: offset must be nonzero" end
 
     local lines = {}
     local file = io.open(args.path, "r")
@@ -145,6 +147,8 @@ tools:register(
       file:close()
     end
 
+    if offset < 0 then offset = #lines + 1 end
+
     local data = {}
     if args.data and args.data ~= "" then
       for line in (args.data .. "\n"):gmatch("(.-)\n") do
@@ -152,7 +156,7 @@ tools:register(
       end
     end
 
-    local last = count and (offset + count - 1) or #lines
+    local last = count < 0 and #lines or (offset + count - 1)
     local result = {}
     for index = 1, math.min(offset - 1, #lines) do
       table.insert(result, lines[index])
