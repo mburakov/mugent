@@ -84,8 +84,9 @@ end
 
 tools:register(
   "read",
-  "Read and return the contents of a file on the local disk. Optional " ..
-  "`offset` and `count` can be provided to read a section of the file.",
+  "Read and return the contents of a text file on the local disk. Provides " ..
+  "line numebers in the `<number>: <line>` format. Optional `offset` and " ..
+  "`count` can be provided to read only a section of the file.",
   {
     path = tools.property(
       "string", "Path to the file to read.", true),
@@ -106,7 +107,7 @@ tools:register(
     for line in file:lines() do
       lineno = lineno + 1
       if lineno >= offset then
-        table.insert(lines, line)
+        table.insert(lines, string.format("%d: %s", lineno, line))
         if count and #lines >= count then break end
       end
     end
