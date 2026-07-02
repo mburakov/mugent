@@ -53,6 +53,7 @@ request:easy_setopt(curl.CURLOPT_WRITEFUNCTION, function(chunk)
     callback_context.pending = string.sub(callback_context.pending, stop + 1)
     local message = json.parse(line).message
     if message.content and message.content ~= "" then
+      if #callback_context.content == 0 then io.write('assistant> ') end
       table.insert(callback_context.content, message.content)
       io.write(message.content)
       io.flush()
@@ -112,9 +113,13 @@ local function run_turn()
       tool_calls = #tool_calls > 0 and tool_calls or nil,
     })
     if #tool_calls == 0 then break end
+    io.write("\n")
     for _, call in ipairs(tool_calls) do
       local funcall = call["function"]
+      local sargs = json.stringify(funcall.arguments)
+      io.write("tool> " .. funcall.name .. " " .. sargs .. "\n")
       local result = tools:call(funcall.name, funcall.arguments)
+      io.write(tostring(result) .. "\n")
       table.insert(messages, {
         role = "tool",
         tool_name = funcall.name,
@@ -126,7 +131,7 @@ local function run_turn()
 end
 
 while true do
-  local line = readline.readline("> ")
+  local line = readline.readline("user> ")
   if line == nil then break end
   if line:sub(1, 1) == "/" then
     local ok, res = commands.execute(line)
