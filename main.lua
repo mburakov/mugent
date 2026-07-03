@@ -66,7 +66,23 @@ request:easy_setopt(curl.CURLOPT_WRITEFUNCTION, function(chunk)
   end
 end)
 
-local messages = {}
+local function init_messages()
+  local messages = {}
+  local agents_files = util.find_agents_files()
+  if #agents_files > 0 then
+    table.insert(messages, {
+      role = "system",
+      content = table.concat(agents_files, "\n\n"),
+    })
+  end
+  return messages
+end
+
+local messages = init_messages()
+commands.register("clear", {}, function()
+  messages = init_messages()
+  return "Context cleared."
+end)
 
 commands.register("save", { "filename" }, function(args)
   local fname = args.filename
