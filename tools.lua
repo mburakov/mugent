@@ -84,9 +84,12 @@ end
 
 tools:register(
   "read",
-  "Read and return the contents of a text file on the local disk. Provides " ..
-  "line numebers in the `<number>: <line>` format. Optional `offset` and " ..
-  "`count` can be provided to read only a section of the file.",
+  "Read and return the contents of a text file on the local disk. Lines are " ..
+  "prefixed with their 1-based number as `<number>: <line>`, matching the " ..
+  "numbering the `write` tool expects.\nProvide just `path` to read the " ..
+  "whole file, or add `offset` (1-based start line) and `count` (lines to " ..
+  "read) to read a section.\nExample: read 20 lines from line 100 by " ..
+  "setting `offset` to 100 and `count` to 20.",
   {
     path = tools.property(
       "string", "Path to the file to read.", true),
@@ -119,9 +122,17 @@ tools:register(
 
 tools:register(
   "write",
-  "Write a file on the local disk, creating it if needed. `offset` (1-based) " ..
-  "and `count` select a line range starting at `offset`. Omit `data` to " ..
-  "delete the selected lines. Replace the whole file with offset=1, count=-1.",
+  "Write text to a file on the local disk.\n1. Overwrite/Create: Provide " ..
+  "`path` and `data` (no `offset` or `count`) to replace the entire " ..
+  "file.\n2. Replace Range: Provide `path`, `offset` (1-based start line), " ..
+  "`count` (number of lines to remove), and `data` (text to insert).\n3. " ..
+  "Insert: Provide `path`, `offset`, and `data` with `count: 0` to insert " ..
+  "text before the offset without deleting any lines.\n4. Delete: Provide " ..
+  "`path`, `offset`, and `count` while omitting `data`.\n5. Append: Use a " ..
+  "negative `offset` to target the end of the file.\nAlways `read` the file " ..
+  "first to verify line numbers before performing range-based " ..
+  "operations.\nExample: replace lines 5-7 by setting `offset` to 5, " ..
+  "`count` to 3, and `data` to the new text.",
   {
     path = tools.property(
       "string", "Path to the file to write.", true),
@@ -131,13 +142,13 @@ tools:register(
       "integer", "First line to operate on, counting from 1. First line by " ..
       "default; negative refers to the end of the file, e.g. for appending."),
     count = tools.property(
-      "integer", "Lines to replace starting at offset. 1 by default; 0 " ..
-      "inserts before offset without replacing; negative replaces through " ..
-      "end of file."),
+      "integer", "Lines to replace starting at offset. Through end of file " ..
+      "by default; 0 inserts before offset without replacing; negative " ..
+      "replaces through end of file."),
   },
   function(args)
     local offset = math.floor(args.offset or 1)
-    local count = math.floor(args.count or 1)
+    local count = math.floor(args.count or -1)
     util.check(offset ~= 0, "offset must be nonzero")
 
     local lines = {}
@@ -181,7 +192,13 @@ tools:register(
 
 tools:register(
   "exec",
-  "Execute an arbitrary shell command and return the output.",
+  "Execute a shell command via the system shell and return its combined " ..
+  "stdout and stderr.\nRuns non-interactively with no timeout, so never run " ..
+  "commands that wait for input or block forever. Quote or escape shell " ..
+  "metacharacters (backticks, dollar signs, asterisks, semicolons, pipes, " ..
+  "and quotes) unless you intend the shell to interpret them. Returns `(no " ..
+  "output)` if the command printed nothing.\nExample: set `command` to `ls " ..
+  "-la` to list files.",
   {
     command = tools.property("string", "The shell command to execute.", true),
   },
@@ -195,7 +212,10 @@ tools:register(
 
 tools:register(
   "fetch",
-  "Fetch the content of a URL from the internet.",
+  "Fetch the content of a URL from the internet. Follows redirects and " ..
+  "returns the raw response body (e.g. HTML or JSON) as text.\nReturns " ..
+  "`(empty response)` if the body is empty.\nExample: set `url` to " ..
+  "`https://example.com/data.json`.",
   {
     url = tools.property("string", "The URL to fetch.", true),
   },
@@ -220,10 +240,12 @@ tools:register(
 
 tools:register(
   "pcall",
-  "Execute arbitrary Lua code, wrapped in pcall, in the same Lua " ..
-  "environment as the current model loop. Multiline source is allowed; " ..
-  "use a `return` statement to surface values. The result follows pcall " ..
-  "convention, serialized as a JSON array.",
+  "Execute arbitrary Lua code, wrapped in `pcall`, in the same Lua " ..
+  "environment as the current model loop.\nMultiline source is allowed; use " ..
+  "a `return` statement to surface values. The result follows `pcall` " ..
+  "convention (a success boolean followed by the return values or an " ..
+  "error), serialized as a JSON array.\nExample: setting `code` to `return " ..
+  "6 * 7` yields `[true,42]`.",
   {
     code = tools.property("string", "Lua code to execute.", true)
   },
