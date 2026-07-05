@@ -57,11 +57,16 @@ end
 function tools:register(name, description, properties, handler)
   local required
   properties, required = transform(properties)
-  registry.handlers[name] = handler
+  local names = type(name) == "string" and { name } or name
+
+  for _, n in ipairs(names) do
+    registry.handlers[n] = handler
+  end
+
   table.insert(registry.tools, {
     type = "function",
     ["function"] = {
-      name = name,
+      name = names[1],
       parameters = {
         type = "object",
         properties = properties,
@@ -191,19 +196,20 @@ tools:register(
 )
 
 tools:register(
-  "exec",
-  "Execute a shell command via the system shell and return its combined " ..
-  "stdout and stderr.\nRuns non-interactively with no timeout, so never run " ..
-  "commands that wait for input or block forever. Quote or escape shell " ..
-  "metacharacters (backticks, dollar signs, asterisks, semicolons, pipes, " ..
-  "and quotes) unless you intend the shell to interpret them. Returns `(no " ..
-  "output)` if the command printed nothing.\nExample: set `command` to `ls " ..
-  "-la` to list files.",
+  { "exec", "run", "shell" },
+  "Execute a shell command via the system shell and return its standard " ..
+  "output.\nStandard error is not captured; append `2>&1` to the command if " ..
+  "you need it merged into the output. Runs non-interactively with no " ..
+  "timeout, so never run commands that wait for input or block forever. " ..
+  "Quote or escape shell metacharacters (backticks, dollar signs, " ..
+  "asterisks, semicolons, pipes, and quotes) unless you intend the shell to " ..
+  "interpret them. Returns `(no output)` if the command printed nothing to " ..
+  "stdout.\nExample: set `command` to `ls -la` to list files.",
   {
     command = tools.property("string", "The shell command to execute.", true),
   },
   function(args)
-    local pipe = util.check(io.popen(args.command .. " 2>&1"))
+    local pipe = util.check(io.popen(args.command))
     local output = pipe:read("*a")
     pipe:close()
     return output ~= "" and output or "(no output)"
