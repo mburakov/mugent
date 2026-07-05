@@ -1,1 +1,4 @@
+*.cloud
+*.local
 .env
+mugent

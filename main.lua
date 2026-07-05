@@ -24,10 +24,9 @@ local tools = require("tools")
 local util = require("util")
 
 local ollama_api_key = os.getenv("OLLAMA_API_KEY")
-local ollama_api_url = os.getenv("OLLAMA_API_URL") or
-    "http://127.0.0.1:11434/api/chat"
-local ollama_model = os.getenv("OLLAMA_MODEL") or
-    "qwen3.6:35b"
+local ollama_api_url = assert(os.getenv("OLLAMA_API_URL"))
+local ollama_model = assert(os.getenv("OLLAMA_MODEL"))
+local ollama_num_ctx = os.getenv("OLLAMA_NUM_CTX")
 
 local header = curl.slist()
 header:append("Content-Type: application/json")
@@ -106,10 +105,18 @@ commands.register("load", { "filename" }, function(args)
 end)
 
 local function chat()
+  local options
+  if ollama_num_ctx then
+    options = {
+      num_ctx = tonumber(ollama_num_ctx),
+    }
+  end
+
   request:easy_setopt(curl.CURLOPT_POSTFIELDS, json.stringify {
     model = ollama_model,
     messages = messages,
     tools = tools:get(),
+    options = options,
   })
 
   request:easy_perform()
