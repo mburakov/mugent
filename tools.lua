@@ -57,16 +57,11 @@ end
 function tools:register(name, description, properties, handler)
   local required
   properties, required = transform(properties)
-  local names = type(name) == "string" and { name } or name
-
-  for _, n in ipairs(names) do
-    registry.handlers[n] = handler
-  end
-
+  registry.handlers[name] = handler
   table.insert(registry.tools, {
     type = "function",
     ["function"] = {
-      name = names[1],
+      name = name,
       parameters = {
         type = "object",
         properties = properties,
@@ -89,25 +84,23 @@ end
 
 tools:register(
   "read",
-  "Read and return the contents of a text file on the local disk. Lines are " ..
-  "prefixed with their 1-based number as `<number>: <line>`, matching the " ..
-  "numbering the `write` tool expects.\nProvide just `path` to read the " ..
-  "whole file, or add `offset` (1-based start line) and `count` (lines to " ..
-  "read) to read a section.\nExample: read 20 lines from line 100 by " ..
-  "setting `offset` to 100 and `count` to 20.",
+  "Read the contents of a text file verbatim. Returns the whole file by " ..
+  "default. Optionally pass `offset` and `limit` to read only a section.",
   {
     path = tools.property(
       "string", "Path to the file to read.", true),
     offset = tools.property(
-      "integer", "First line to read counting from 1. First by default."),
-    count = tools.property(
-      "integer", "Number of lines to read. Till end of file by default."),
+      "integer", "First line to read, counting from 1. First line by default."),
+    limit = tools.property(
+      "integer", "Maximum number of lines to read. To end of file by default."),
   },
   function(args)
-    local offset = math.floor(args.offset or 1)
-    local count = args.count and math.floor(args.count)
+    util.check(
+      type(args.path) == "string" and args.path ~= "", "path is required")
+    local offset = args.offset and math.floor(args.offset) or 1
+    local limit = args.limit and math.floor(args.limit) or nil
     util.check(offset >= 1, "offset must be >= 1")
-    util.check(not count or count >= 1, "count must be >= 1")
+    util.check(not limit or limit >= 1, "limit must be >= 1")
     local file = util.check(io.open(args.path, "r"))
 
     local lines = {}
@@ -115,88 +108,130 @@ tools:register(
     for line in file:lines() do
       lineno = lineno + 1
       if lineno >= offset then
-        table.insert(lines, string.format("%d: %s", lineno, line))
-        if count and #lines >= count then break end
+        table.insert(lines, line)
+        if limit and #lines >= limit then break end
       end
     end
-    file:close()
 
+    file:close()
     return table.concat(lines, "\n")
   end
 )
 
 tools:register(
   "write",
-  "Write text to a file on the local disk.\n1. Overwrite/Create: Provide " ..
-  "`path` and `data` (no `offset` or `count`) to replace the entire " ..
-  "file.\n2. Replace Range: Provide `path`, `offset` (1-based start line), " ..
-  "`count` (number of lines to remove), and `data` (text to insert).\n3. " ..
-  "Insert: Provide `path`, `offset`, and `data` with `count: 0` to insert " ..
-  "text before the offset without deleting any lines.\n4. Delete: Provide " ..
-  "`path`, `offset`, and `count` while omitting `data`.\n5. Append: Use a " ..
-  "negative `offset` to target the end of the file.\nAlways `read` the file " ..
-  "first to verify line numbers before performing range-based " ..
-  "operations.\nExample: replace lines 5-7 by setting `offset` to 5, " ..
-  "`count` to 3, and `data` to the new text.",
+  "Write content to a file. Creates the file if it doesn't exist, " ..
+  "overwrites if it does. Automatically creates parent directories.",
   {
     path = tools.property(
       "string", "Path to the file to write.", true),
-    data = tools.property(
-      "string", "Lines to write. Omit to delete the selected lines."),
-    offset = tools.property(
-      "integer", "First line to operate on, counting from 1. First line by " ..
-      "default; negative refers to the end of the file, e.g. for appending."),
-    count = tools.property(
-      "integer", "Lines to replace starting at offset. Through end of file " ..
-      "by default; 0 inserts before offset without replacing; negative " ..
-      "replaces through end of file."),
+    content = tools.property(
+      "string", "Full content to write to the file.", true),
   },
   function(args)
-    local offset = math.floor(args.offset or 1)
-    local count = math.floor(args.count or -1)
-    util.check(offset ~= 0, "offset must be nonzero")
+    util.check(
+      type(args.path) == "string" and args.path ~= "", "path is required")
+    util.check(type(args.content) == "string", "content must be a string")
 
-    local lines = {}
-    local file = io.open(args.path, "r")
-    if file then
-      for line in file:lines() do
-        table.insert(lines, line)
-      end
-      file:close()
-    end
-
-    local data = {}
-    if offset < 0 then offset = #lines + 1 end
-    if args.data and args.data ~= "" then
-      for line in (args.data .. "\n"):gmatch("(.-)\n") do
-        table.insert(data, line)
-      end
-    end
-
-    local result = {}
-    local last = count < 0 and #lines or (offset + count - 1)
-    for index = 1, math.min(offset - 1, #lines) do
-      table.insert(result, lines[index])
-    end
-    for _, line in ipairs(data) do
-      table.insert(result, line)
-    end
-    for index = last + 1, #lines do
-      table.insert(result, lines[index])
+    local dir = args.path:match("^(.*)/[^/]+$")
+    if dir and dir ~= "" then
+      os.execute("mkdir -p '" .. dir:gsub("'", "'\\''") .. "'")
     end
 
     local out = util.check(io.open(args.path, "w"))
-    if #result > 0 then
-      out:write(table.concat(result, "\n"), "\n")
-    end
+    out:write(args.content)
     out:close()
 
-    return ("ok: wrote %d lines to %s"):format(#result, args.path)
+    return ("ok: wrote %d bytes to %s"):format(#args.content, args.path)
   end
 )
 
 tools:register(
-  { "exec", "run", "shell" },
+  "edit",
+  "Edit a single file using exact text replacement. Every change must match " ..
+  "a unique, non-overlapping region of the original file. If two changes " ..
+  "affect the same block or nearby lines, merge them into one edit instead " ..
+  "of emitting overlapping edits. Do not include large unchanged regions " ..
+  "just to connect distant changes.",
+  {
+    path = tools.property(
+      "string", "Path to the file to edit.", true),
+    edits = tools.property(
+      "array", "One or more targeted replacements. Each edit is matched " ..
+      "against the original file, not incrementally. Do not include " ..
+      "overlapping or nested edits. If two changes touch the same block " ..
+      "or nearby lines, merge them into one edit instead.", true),
+  },
+  function(args)
+    local path = args.path
+    util.check(type(path) == "string" and path ~= "", "path is required")
+    local edits = args.edits
+    util.check(type(edits) == "table" and #edits > 0,
+      "edits must be a non-empty array of [old_text, new_text]")
+    local file = util.check(io.open(path, "r"))
+    local body = file:read("*a")
+    file:close()
+
+    local matched = {}
+    for i, e in ipairs(edits) do
+      local old = e.oldText
+      local new = e.newText
+      util.check(type(old) == "string" and old ~= "",
+        ("edits[%d]: oldText must be a non-empty string"):format(i))
+      util.check(type(new) == "string",
+        ("edits[%d]: newText must be a string"):format(i))
+
+      local first, count, scan = nil, 0, 1
+      while true do
+        local s = string.find(body, old, scan, true)
+        if not s then break end
+        first = first or s
+        count = count + 1
+        scan = s + #old
+      end
+      util.check(first, ("edits[%d]: old_text not found in %s"):format(i, path))
+      util.check(count == 1, string.format(
+        "edits[%d]: old_text is not unique in %s (%d matches); add " ..
+        "surrounding context", i, path, count))
+      table.insert(matched, {
+        start = first,
+        len = #old,
+        new = new,
+        index = i
+      })
+    end
+
+    table.sort(matched, function(a, b)
+      return a.start < b.start
+    end)
+    for i = 2, #matched do
+      local prev, cur = matched[i - 1], matched[i]
+      util.check(prev.start + prev.len <= cur.start, string.format(
+        "edits[%d] and edits[%d] overlap in %s; merge them into one edit",
+        prev.index, cur.index, path))
+    end
+
+    local result, pos = {}, 1
+    for _, m in ipairs(matched) do
+      table.insert(result, string.sub(body, pos, m.start - 1))
+      table.insert(result, m.new)
+      pos = m.start + m.len
+    end
+
+    table.insert(result, string.sub(body, pos))
+    local updated = table.concat(result)
+    util.check(updated ~= body, "edits produced no change to " .. path)
+
+    local out = util.check(io.open(path, "w"))
+    out:write(updated)
+    out:close()
+
+    return ("ok: applied %d edit(s) to %s"):format(#matched, path)
+  end
+)
+
+tools:register(
+  "exec",
   "Execute a shell command via the system shell and return its standard " ..
   "output.\nStandard error is not captured; append `2>&1` to the command if " ..
   "you need it merged into the output. Runs non-interactively with no " ..
@@ -204,7 +239,7 @@ tools:register(
   "Quote or escape shell metacharacters (backticks, dollar signs, " ..
   "asterisks, semicolons, pipes, and quotes) unless you intend the shell to " ..
   "interpret them. Returns `(no output)` if the command printed nothing to " ..
-  "stdout.\nExample: set `command` to `ls -la` to list files.",
+  "stdout.",
   {
     command = tools.property("string", "The shell command to execute.", true),
   },
@@ -220,8 +255,7 @@ tools:register(
   "fetch",
   "Fetch the content of a URL from the internet. Follows redirects and " ..
   "returns the raw response body (e.g. HTML or JSON) as text.\nReturns " ..
-  "`(empty response)` if the body is empty.\nExample: set `url` to " ..
-  "`https://example.com/data.json`.",
+  "`(empty response)` if the body is empty.",
   {
     url = tools.property("string", "The URL to fetch.", true),
   },
@@ -250,8 +284,7 @@ tools:register(
   "environment as the current model loop.\nMultiline source is allowed; use " ..
   "a `return` statement to surface values. The result follows `pcall` " ..
   "convention (a success boolean followed by the return values or an " ..
-  "error), serialized as a JSON array.\nExample: setting `code` to `return " ..
-  "6 * 7` yields `[true,42]`.",
+  "error), serialized as a JSON array.",
   {
     code = tools.property("string", "Lua code to execute.", true)
   },
