@@ -18,10 +18,10 @@
 
 local commands = require("commands")
 local curl = require("curl")
+local filesystem = require("filesystem")
 local json = require("json")
 local readline = require("readline")
 local tools = require("tools")
-local util = require("util")
 
 local ollama_api_key = os.getenv("OLLAMA_API_KEY")
 local ollama_api_url = assert(os.getenv("OLLAMA_API_URL"))
@@ -65,9 +65,29 @@ request:easy_setopt(curl.CURLOPT_WRITEFUNCTION, function(chunk)
   end
 end)
 
+local function find_agents_files()
+  local dir = filesystem.getcwd()
+  local parts = {}
+  while true do
+    local f = io.open(dir .. "/AGENTS.md", "r")
+    if f then
+      table.insert(parts, f:read("*a"))
+      f:close()
+    end
+    if dir == "" then break end
+    dir = dir:match("^(.*)/") or ""
+  end
+
+  local ordered = {}
+  for i = #parts, 1, -1 do
+    table.insert(ordered, parts[i])
+  end
+  return ordered
+end
+
 local function init_messages()
   local messages = {}
-  local agents_files = util.find_agents_files()
+  local agents_files = find_agents_files()
   if #agents_files > 0 then
     table.insert(messages, {
       role = "system",
@@ -85,8 +105,8 @@ end)
 
 commands.register("save", { "filename" }, function(args)
   local fname = args.filename
-  util.check(fname and fname ~= "", "filename required")
-  local f = util.check(io.open(fname, "w"))
+  assert(fname and fname ~= "", "filename required")
+  local f = assert(io.open(fname, "w"))
   f:write(json.stringify(messages))
   f:close()
   return "Messages saved to " .. fname
@@ -94,13 +114,13 @@ end)
 
 commands.register("load", { "filename" }, function(args)
   local fname = args.filename
-  util.check(fname and fname ~= "", "filename required")
-  local f = util.check(io.open(fname, "r"))
+  assert(fname and fname ~= "", "filename required")
+  local f = assert(io.open(fname, "r"))
   local content = f:read("*all")
   f:close()
   local decoded = json.parse(content)
-  messages = util.check(type(decoded) == "table",
-    "invalid message format in file")
+  assert(type(decoded) == "table", "invalid message format in file")
+  messages = decoded
   return "Messages loaded from " .. fname
 end)
 

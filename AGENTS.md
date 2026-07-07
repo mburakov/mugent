@@ -9,13 +9,13 @@ an Ollama model through a REPL. Work carefully and verify your changes.
 - `json.lua` - RFC 8259 JSON parse/serialize.
 - `readline.lua` - libreadline binding for line input.
 - `commands.lua` - slash-command registry (`/save`, `/load`, `/clear`).
-- `tools.lua` - tools exposed to the model: read, write, edit, exec, fetch, pcall.
-- `util.lua` - helpers; `util.check` for errors; recursive `AGENTS.md` discovery.
+- `tools.lua` - tool registry; individual tools live under `tools/` (read, write, pcall, ...).
+- `filesystem.lua` - LuaJIT FFI filesystem helpers (`getcwd`). Recursive `AGENTS.md` discovery lives in `main.lua`.
 
 ## Working Rules
 1. **Safety**: Treat `exec` as capable of irreversible actions; `read` a file
    before you `write` (overwrite) or `edit` it.
-2. **Consistency**: Match the existing modular style; use `util.check` for errors.
+2. **Consistency**: Match the existing modular style; use `assert` for errors.
 3. **Verify**: Test changes with `pcall` or by running the code, not by assumption.
 4. **Document**: Comment new tools and non-obvious logic.
 5. **Commit messages**: Append `Co-authored-by: <your actual model id>` (e.g.
