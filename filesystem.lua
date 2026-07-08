@@ -19,7 +19,11 @@ local ffi = require("ffi")
 
 ffi.cdef [[
 char* get_current_dir_name();
+int mkdir(const char *pathname, unsigned int mode);
+char* dirname(char *path);
+char* realpath(const char *path, char *resolved_path);
 void free(void*);
+int* __errno_location(void);
 ]]
 
 local filesystem = {}
@@ -28,6 +32,29 @@ function filesystem.getcwd()
   local buf = ffi.gc(
     ffi.C.get_current_dir_name(), ffi.C.free)
   return ffi.string(buf)
+end
+
+function filesystem.dirname(path)
+  local buf = ffi.new("char[?]", #path + 1)
+  ffi.copy(buf, path)
+  return ffi.string(ffi.C.dirname(buf))
+end
+
+local function realpath(path)
+  local resolved = ffi.C.realpath(path, nil)
+  if resolved == nil then return nil end
+  return ffi.string(ffi.gc(resolved, ffi.C.free))
+end
+
+function filesystem.mkdir_p(dir)
+  if dir == "" or dir == "." or dir == "/" then return end
+  if realpath(dir) then return end
+  filesystem.mkdir_p(filesystem.dirname(dir))
+  if ffi.C.mkdir(dir, 0x1FF) ~= 0 and        -- 0777
+      ffi.C.__errno_location()[0] ~= 17 then -- EEXIST
+    error(string.format("mkdir failed for %q: errno=%d",
+      dir, ffi.C.__errno_location()[0]))
+  end
 end
 
 return filesystem

@@ -15,6 +15,8 @@
 -- along with mugent.  If not, see <https://www.gnu.org/licenses/>.
 --
 
+local filesystem = require("filesystem")
+
 local name = "write"
 
 local description =
@@ -42,17 +44,12 @@ local function handler(args)
   local content = type(args.content) == "string" and args.content or nil
   assert(content, "`content` must be a string")
 
-  -- TODO(mburakov): Use FFI here.
-  local dir = args.path:match("^(.*)/[^/]+$")
-  if dir and dir ~= "" then
-    os.execute("mkdir -p '" .. dir:gsub("'", "'\\''") .. "'")
-  end
-
-  local file = assert(io.open(args.path, "w"))
-  file:write(args.content)
+  filesystem.mkdir_p(filesystem.dirname(path))
+  local file = assert(io.open(path, "w"))
+  file:write(content)
   file:close()
 
-  return ("ok: wrote %d bytes to %s"):format(#args.content, args.path)
+  return ("ok: wrote %d bytes to %s"):format(#content, path)
 end
 
 return {
