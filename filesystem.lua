@@ -40,7 +40,7 @@ function filesystem.dirname(path)
   return ffi.string(ffi.C.dirname(buf))
 end
 
-local function realpath(path)
+function filesystem.realpath(path)
   local resolved = ffi.C.realpath(path, nil)
   if resolved == nil then return nil end
   return ffi.string(ffi.gc(resolved, ffi.C.free))
@@ -48,7 +48,7 @@ end
 
 function filesystem.mkdir_p(dir)
   if dir == "" or dir == "." or dir == "/" then return end
-  if realpath(dir) then return end
+  if filesystem.realpath(dir) then return end
   filesystem.mkdir_p(filesystem.dirname(dir))
   if ffi.C.mkdir(dir, 0x1FF) ~= 0 and        -- 0777
       ffi.C.__errno_location()[0] ~= 17 then -- EEXIST

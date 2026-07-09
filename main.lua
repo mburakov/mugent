@@ -66,16 +66,15 @@ request:easy_setopt(curl.CURLOPT_WRITEFUNCTION, function(chunk)
 end)
 
 local function find_agents_files()
-  local dir = filesystem.getcwd()
   local parts = {}
-  while true do
+  local dir = filesystem.realpath(filesystem.getcwd())
+  while dir ~= "/" do
     local f = io.open(dir .. "/AGENTS.md", "r")
+    dir = filesystem.dirname(dir)
     if f then
       table.insert(parts, f:read("*a"))
       f:close()
     end
-    if dir == "" then break end
-    dir = dir:match("^(.*)/") or ""
   end
 
   local ordered = {}
