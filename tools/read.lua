@@ -17,6 +17,10 @@
 
 local name = 'read'
 
+local aliases = {
+  "Read", "read_file",
+}
+
 local description =
     "Read the contents of a text file verbatim. Returns the whole file by " ..
     "default. Optionally pass `offset` and `limit` to read only a section."
@@ -72,4 +76,5 @@ return {
   description = description,
   parameters = parameters,
   handler = handler,
+  aliases = aliases,
 }

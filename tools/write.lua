@@ -19,6 +19,10 @@ local filesystem = require("filesystem")
 
 local name = "write"
 
+local aliases = {
+  "Write", "write_file", "create_file",
+}
+
 local description =
     "Write content to a file. Creates the file if it doesn't exist, " ..
     "overwrites if it does. Automatically creates parent directories."
@@ -57,4 +61,5 @@ return {
   description = description,
   parameters = parameters,
   handler = handler,
+  aliases = aliases,
 }

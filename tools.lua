@@ -20,6 +20,7 @@ local tools = {}
 local registry = {
   tools = {},
   handlers = {},
+  aliases = {},
 }
 
 function tools:register(tool)
@@ -32,6 +33,9 @@ function tools:register(tool)
       parameters = tool.parameters,
     }
   })
+  for _, alias in ipairs(tool.aliases or {}) do
+    registry.aliases[alias] = tool.name
+  end
 end
 
 function tools:get()
@@ -39,6 +43,24 @@ function tools:get()
 end
 
 function tools:call(name, args)
+  if not registry.handlers[name] then
+    local real_name = registry.aliases[name]
+    if real_name then
+      return string.format(
+        "Unknown tool `%s`. Did you mean to call `%s`?",
+        name, real_name)
+    end
+
+    local available = {}
+    for _, t in ipairs(registry.tools) do
+      table.insert(available,
+        string.format("`%s`", t["function"].name))
+    end
+    return string.format(
+      "Unknown tool `%s`. Available tools: %s.",
+      name, table.concat(available, ", "))
+  end
+
   local ok, result = pcall(registry.handlers[name], args)
   if not ok then return "error: " .. tostring(result) end
   return result

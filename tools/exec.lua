@@ -17,6 +17,11 @@
 
 local name = "exec"
 
+local aliases = {
+  "Bash", "shell", "local_shell", "run_shell_command", "run_in_terminal",
+  "run_terminal_cmd",
+}
+
 local description =
     "Execute a shell command via the system shell and return its standard " ..
     "output. Standard error is not captured; append `2>&1` to the command " ..
@@ -52,4 +57,5 @@ return {
   description = description,
   parameters = parameters,
   handler = handler,
+  aliases = aliases,
 }

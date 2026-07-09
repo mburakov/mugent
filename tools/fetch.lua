@@ -19,6 +19,10 @@ local curl = require("curl")
 
 local name = "fetch"
 
+local aliases = {
+  "WebFetch", "web_fetch", "fetch_webpage",
+}
+
 local description =
   "Fetch the content of a URL from the internet. Follows redirects and " ..
   "returns the raw response body (e.g. HTML or JSON) as text. Returns " ..
@@ -58,4 +62,5 @@ return {
   description = description,
   parameters = parameters,
   handler = handler,
+  aliases = aliases,
 }

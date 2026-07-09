@@ -17,6 +17,11 @@
 
 local name = "edit"
 
+local aliases = {
+  "Edit", "MultiEdit", "str_replace_based_edit_tool", "apply_patch", "replace",
+  "replace_string_in_file", "insert_edit_into_file", "edit_file",
+}
+
 local description =
     "Edit a single file using exact text replacement. Every change must " ..
     "match a unique, non-overlapping region of the original file. If two " ..
@@ -124,4 +129,5 @@ return {
   description = description,
   parameters = parameters,
   handler = handler,
+  aliases = aliases,
 }
