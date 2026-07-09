@@ -1,4 +1,1 @@
-*.cloud
-*.local
-.env
-mugent
+contrib/.*

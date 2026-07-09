@@ -1,0 +1,24 @@
+#!/bin/bash
+
+real_path=$(realpath "${BASH_SOURCE[0]}")
+this_dir=$(dirname "$real_path")
+mugent=$(dirname "$this_dir")
+
+args=(
+	--ro-bind / /
+	--dev-bind /dev /dev
+	--proc /proc
+	--bind /tmp /tmp
+	--bind /dev/pts /dev/pts
+	--bind "/run/user/$UID" "/run/user/$UID"
+)
+
+for path in "$@"; do
+	abs_path=$(realpath "$path")
+	args+=(--bind "$abs_path" "$abs_path")
+done
+
+cd "$mugent"
+source 'contrib/.env'
+exec bwrap "${args[@]}" \
+	./main.lua
